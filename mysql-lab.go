@@ -18,9 +18,12 @@ type Employee struct {
 func dbConn() (db *sql.DB) {
 	dbDriver := "mysql"
 	dbUser := "root"
-	dbPass := "root"
+	dbPass := "rootpasswd"
 	dbName := "goblog"
-	db, err := sql.Open(dbDriver, dbUser+":"+dbPass+"@/"+dbName)
+	dbHost := "database-1.cpzqou0e4axj.us-east-1.rds.amazonaws.com"
+	dataSourceName := dbUser + ":" + dbPass + "@tcp(" + dbHost + ":3306)/" + dbName
+	log.Println("dataSourceName: ", dataSourceName)
+	db, err := sql.Open(dbDriver, dataSourceName)
 	if err != nil {
 		panic(err.Error())
 	}
