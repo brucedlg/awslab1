@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 	"text/template"
 	"time"
 
@@ -40,16 +39,13 @@ var tmpl = template.Must(template.ParseGlob("form/*"))
 func Index(w http.ResponseWriter, r *http.Request) {
 	db := dbConn()
 	defer db.Close()
+	if err := createTable(db); err != nil {
+		panic(err.Error())
+	}
+
 	selDB, err := db.Query("SELECT * FROM Employee ORDER BY id DESC")
 	if err != nil {
-		log.Println(err)
-		if strings.Contains(err.Error(), "Table 'goblog.Employee' doesn't exist") {
-			if err = createTable(db); err != nil {
-				panic(err.Error())
-			}
-		} else {
-			panic(err.Error())
-		}
+		panic(err.Error())
 	}
 	emp := Employee{}
 	res := []Employee{}
@@ -76,10 +72,9 @@ func createTable(db *sql.DB) error {
 	defer cancelfunc()
 	_, err := db.ExecContext(ctx, query)
 	if err != nil {
-		log.Printf("Error %s when creating product table", err)
+		log.Printf("Error %s when creating goblog.Employee table", err)
 		return err
 	}
-	log.Println("table is created")
 	return nil
 }
 
