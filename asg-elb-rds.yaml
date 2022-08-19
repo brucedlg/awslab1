@@ -1,0 +1,169 @@
+Resources:
+  myLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template
+      LaunchTemplateData:
+        ImageId: ami-090fa75af13c156b4
+        InstanceType: t2.micro
+        KeyName: !Ref KeyName
+        SecurityGroupIds:
+          - !GetAtt webServerSG.GroupId
+        #SecurityGroups:
+        #  - !Ref webServerSG
+        Monitoring: 
+          Enabled: true
+        UserData:
+          'Fn::Base64':
+            !Sub |
+              #!/bin/bash -xe
+              yum update -y aws-cfn-bootstrap
+              /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource myLaunchTemplate --configsets setup --region ${AWS::Region}
+              /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource myLaunchTemplate --region ${AWS::Region}
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: bcc0f4f2-ed7d-4e41-ae18-22f263a25370
+      'AWS::CloudFormation::Init':
+        configSets:
+          setup:
+            - install_server
+        install_server:
+          packages:
+            yum:
+              golang: []
+          commands:
+            001_clone_repo:
+              command: |
+                sudo -H -u ec2-user bash -c "cd /home/ec2-user/ && git clone https://github.com/brucedlg/awslab1.git"
+            002_run:
+              command: |
+                sudo -H -u ec2-user bash -c "cd /home/ec2-user && go install github.com/brucedlg/awslab1@latest"
+            003_run:
+              command: |
+                sudo -H -u ec2-user bash -c "cd /home/ec2-user/awslab1 && nohup /home/ec2-user/go/bin/awslab1 &"
+  webServerSG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Allow HTTP and SSH access from public
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          FromPort: 22
+          IpProtocol: tcp
+          ToPort: 22
+        - CidrIp: 0.0.0.0/0
+          FromPort: 8080
+          IpProtocol: tcp
+          ToPort: 8080
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 740bd1fe-b9dd-42ee-9725-480332ed722d
+  myASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      #AvailabilityZones: !GetAZs
+      VPCZoneIdentifier: !Ref Subnets
+      LaunchTemplate:
+        LaunchTemplateId: !Ref myLaunchTemplate
+        Version: 1
+      MaxSize: '2'
+      MinSize: '1'
+      DesiredCapacity: '1'
+      TargetGroupARNs:
+        - !Ref myTargetGroup
+  myCPUPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref myASG
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: !Ref CPUPolicyTargetValue
+  myLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Subnets: !Ref Subnets
+  myLoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref myTargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref myLoadBalancer
+      Port: '80'
+      Protocol: HTTP
+  myTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: myTargetGroup
+      Port: '8080'
+      Protocol: HTTP
+      VpcId: !Ref VPC
+  myRdsMySQLDbInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: !Ref pDbName
+      MasterUsername: !Ref pDbUser
+      MasterUserPassword: !Ref pDbPass
+      Engine: MySQL
+      DBInstanceClass: db.t2.micro
+      StorageType: gp2
+      PubliclyAccessible: True
+      AllocatedStorage: "20"
+      DBInstanceIdentifier: !Join ["-", [ "myRdsMySQLDbInstance", !Ref "AWS::Region" ]]
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      VPCSecurityGroups: [!GetAtt [DBEC2SecurityGroup, GroupId]]
+  DBEC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Open database for access
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '3306'
+        ToPort: '3306'
+        CidrIp: 0.0.0.0/0
+        #SourceSecurityGroupName: !Ref 'EC2SecurityGroup'
+Metadata:
+  'AWS::CloudFormation::Designer':
+    bcc0f4f2-ed7d-4e41-ae18-22f263a25370:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 60
+        'y': 90
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 740bd1fe-b9dd-42ee-9725-480332ed722d
+    740bd1fe-b9dd-42ee-9725-480332ed722d:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 198.0054244886355
+        'y': 130.1932426229617
+      z: 0
+      embeds: []
+Parameters:
+  KeyName:
+    Description: The EC2 Key Pair to allow SSH access to the instance
+    Type: 'AWS::EC2::KeyPair::KeyName'
+  CPUPolicyTargetValue:
+    Type: String
+    Description: The target utilization for the CPU metric
+  VPC:
+    Type: 'AWS::EC2::VPC::Id'
+    Description: A VPC that allows the load balancer access to the Internet
+  Subnets:
+    Type: 'List<AWS::EC2::Subnet::Id>'
+    Description: At least two public subnets in different Availability Zones in the selected VPC
+  pDbName:
+    Type: String
+    Description: Database Name
+  pDbUser:
+    Type: String
+    Description: Database UserName
+  pDbPass:
+    Type: String
+    Description: "Database Password. It should be less than 8 characters"

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"os"
 	"text/template"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -20,7 +21,8 @@ func dbConn() (db *sql.DB) {
 	dbUser := "root"
 	dbPass := "rootpasswd"
 	dbName := "goblog"
-	dbHost := "database-1.cpzqou0e4axj.us-east-1.rds.amazonaws.com"
+	dbHost := os.Getenv("DBHOST")
+	// dbHost := "database-1.cpzqou0e4axj.us-east-1.rds.amazonaws.com"
 	dataSourceName := dbUser + ":" + dbPass + "@tcp(" + dbHost + ":3306)/" + dbName
 	log.Println("dataSourceName: ", dataSourceName)
 	db, err := sql.Open(dbDriver, dataSourceName)
