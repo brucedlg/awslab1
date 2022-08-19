@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"text/template"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -36,9 +39,17 @@ var tmpl = template.Must(template.ParseGlob("form/*"))
 
 func Index(w http.ResponseWriter, r *http.Request) {
 	db := dbConn()
+	defer db.Close()
 	selDB, err := db.Query("SELECT * FROM Employee ORDER BY id DESC")
 	if err != nil {
-		panic(err.Error())
+		log.Println(err)
+		if strings.Contains(err.Error(), "Table 'goblog.Employee' doesn't exist") {
+			if err = createTable(db); err != nil {
+				panic(err.Error())
+			}
+		} else {
+			panic(err.Error())
+		}
 	}
 	emp := Employee{}
 	res := []Employee{}
@@ -55,7 +66,21 @@ func Index(w http.ResponseWriter, r *http.Request) {
 		res = append(res, emp)
 	}
 	tmpl.ExecuteTemplate(w, "Index", res)
-	defer db.Close()
+}
+
+func createTable(db *sql.DB) error {
+	query := `CREATE TABLE IF NOT EXISTS goblog.Employee(id int primary key auto_increment, name text,  
+        city text)`
+
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelfunc()
+	_, err := db.ExecContext(ctx, query)
+	if err != nil {
+		log.Printf("Error %s when creating product table", err)
+		return err
+	}
+	log.Println("table is created")
+	return nil
 }
 
 func Show(w http.ResponseWriter, r *http.Request) {
