@@ -39,8 +39,9 @@ Resources:
               command: |
                 sudo -H -u ec2-user bash -c "cd /home/ec2-user && go install github.com/brucedlg/awslab1@latest"
             003_run:
-              command: |
-                sudo -H -u ec2-user bash -c "cd /home/ec2-user/awslab1 && nohup /home/ec2-user/go/bin/awslab1 &"
+              command: 
+                !Sub |
+                sudo -H -u ec2-user bash -c "cd /home/ec2-user/awslab1 && DBHOST=${myRdsMySQLDbInstance.Endpoint.Address} nohup /home/ec2-user/go/bin/awslab1 > output.log 2>&1 &"
   webServerSG:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -79,10 +80,22 @@ Resources:
         PredefinedMetricSpecification:
           PredefinedMetricType: ASGAverageCPUUtilization
         TargetValue: !Ref CPUPolicyTargetValue
+  ELBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ELB Security Group
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
   myLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Subnets: !Ref Subnets
+      SecurityGroups:
+        - !GetAtt ELBSecurityGroup.GroupId
   myLoadBalancerListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
