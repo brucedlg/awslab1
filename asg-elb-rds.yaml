@@ -51,10 +51,13 @@ Resources:
           FromPort: 22
           IpProtocol: tcp
           ToPort: 22
-        - CidrIp: 0.0.0.0/0
-          FromPort: 8080
+        - FromPort: 8080
           IpProtocol: tcp
           ToPort: 8080
+          SourceSecurityGroupId:
+            Fn::GetAtt:
+            - ELBSecurityGroup
+            - GroupId
     Metadata:
       'AWS::CloudFormation::Designer':
         id: 740bd1fe-b9dd-42ee-9725-480332ed722d
@@ -134,8 +137,11 @@ Resources:
       - IpProtocol: tcp
         FromPort: '3306'
         ToPort: '3306'
-        CidrIp: 0.0.0.0/0
-        #SourceSecurityGroupName: !Ref 'EC2SecurityGroup'
+        #CidrIp: 0.0.0.0/0
+        SourceSecurityGroupId:
+          Fn::GetAtt:
+          - webServerSG
+          - GroupId
 Metadata:
   'AWS::CloudFormation::Designer':
     bcc0f4f2-ed7d-4e41-ae18-22f263a25370:
